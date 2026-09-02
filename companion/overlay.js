@@ -6,7 +6,7 @@
   let until = 0, timer = null, scrollY = 0;
 
   const swallow = e => { e.stopImmediatePropagation(); e.preventDefault(); };
-  const EVENTS = ["wheel", "touchmove", "keydown", "keyup", "keypress", "mousedown", "click", "pointerdown"];
+  const EVENTS = ["wheel", "touchstart", "touchmove", "keydown", "keyup", "keypress", "mousedown", "mouseup", "click", "dblclick", "pointerdown", "pointerup", "contextmenu"];
 
   function mount() {
     if (document.getElementById(ID)) return;
@@ -23,7 +23,6 @@
     el.innerHTML = `<div style="color:#999"><span data-site style="color:#eee;text-transform:capitalize"></span> is resting.</div>
       <div data-t style="font-size:64px;font-weight:300;font-variant-numeric:tabular-nums;letter-spacing:.02em">--:--</div>`;
     (document.body || root).appendChild(el);
-    root.style.setProperty("overflow", "hidden", "important");
     for (const ev of EVENTS) window.addEventListener(ev, swallow, { capture: true, passive: false });
     document.querySelectorAll("video, audio").forEach(m => { try { m.pause(); } catch {} });
     timer = setInterval(tick, 500);
@@ -33,10 +32,9 @@
   function unmount() {
     const el = document.getElementById(ID);
     if (el) el.remove();
-    document.documentElement.style.removeProperty("overflow");
     for (const ev of EVENTS) window.removeEventListener(ev, swallow, { capture: true });
     clearInterval(timer); timer = null;
-    window.scrollTo(0, scrollY);
+    if (Math.abs(window.scrollY - scrollY) > 2) window.scrollTo(0, scrollY);
   }
 
   function tick() {
