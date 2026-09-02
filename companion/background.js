@@ -38,8 +38,9 @@ async function poll() {
     await push();
     badge();
   } catch (e) {
-    chrome.action.setBadgeText({ text: "?" });
-    chrome.action.setBadgeBackgroundColor({ color: "#888" });
+    lastIconKey = "";
+    chrome.action.setIcon({ imageData: { 16: drawIcon(16, { frac: 0, label: "?", color: "#888", faint: "rgba(136,136,136,.3)" }),
+                                         32: drawIcon(32, { frac: 0, label: "?", color: "#888", faint: "rgba(136,136,136,.3)" }) } }).catch(() => {});
   }
 }
 
@@ -54,18 +55,55 @@ async function push() {
   }
 }
 
-function badge() {
-  const n = Object.keys(status.blocked || {}).length;
-  if (n) {
-    chrome.action.setBadgeText({ text: String(n) });
-    chrome.action.setBadgeBackgroundColor({ color: "#c0392b" });
-  } else {
-    const used = Object.values(status.used_minutes || {});
-    const worst = used.length ? Math.max(...used) : 0;
-    chrome.action.setBadgeText({ text: worst ? `${worst}/${status.budget_minutes}` : "" });
-    chrome.action.setBadgeBackgroundColor({ color: "#2c3e50" });
+// The toolbar icon is the timer. Resting: a red ring draining with the cooldown
+// and the minutes left in the middle (seconds under a minute). Otherwise: a
+// ring filling with the budget spent and the minutes used. Nothing: idle mark.
+function drawIcon(size, { frac, label, color, faint }) {
+  const c = new OffscreenCanvas(size, size), g = c.getContext("2d");
+  const r = size / 2, lw = Math.max(1.5, size * 0.11);
+  g.clearRect(0, 0, size, size);
+  g.beginPath(); g.arc(r, r, r - lw / 2 - 0.5, 0, Math.PI * 2);
+  g.strokeStyle = faint; g.lineWidth = lw; g.stroke();
+  if (frac > 0) {
+    g.beginPath(); g.arc(r, r, r - lw / 2 - 0.5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, frac));
+    g.strokeStyle = color; g.lineCap = "round"; g.stroke();
   }
+  if (label) {
+    g.fillStyle = color;
+    g.font = `${label.length > 1 ? 600 : 700} ${Math.round(size * (label.length > 1 ? 0.42 : 0.6))}px -apple-system,system-ui,sans-serif`;
+    g.textAlign = "center"; g.textBaseline = "middle";
+    g.fillText(label, r, r + size * 0.04);
+  }
+  return g.getImageData(0, 0, size, size);
 }
+
+function iconSpec() {
+  const blocked = status.blocked || {};
+  const keys = Object.keys(blocked);
+  if (keys.length) {
+    // Soonest release drives the icon.
+    const left = Math.max(0, Math.min(...keys.map(k => status.fetchedAt + blocked[k].seconds_left * 1000)) - Date.now()) / 1000;
+    const total = (status.cooldown_minutes || 5) * 60;
+    return { frac: left / total, color: "#e74c3c", faint: "rgba(231,76,60,.25)",
+             label: left >= 60 ? String(Math.ceil(left / 60)) : String(Math.ceil(left)) };
+  }
+  const used = Object.values(status.used_minutes || {});
+  const worst = used.length ? Math.max(...used) : 0;
+  const budget = status.budget_minutes || 5;
+  if (worst) return { frac: worst / budget, color: worst >= budget - 1 ? "#e67e22" : "#ecf0f1", faint: "rgba(236,240,241,.25)", label: String(worst) };
+  return { frac: 0, color: "#ecf0f1", faint: "rgba(236,240,241,.35)", label: "" };
+}
+
+let lastIconKey = "";
+function badge() {
+  chrome.action.setBadgeText({ text: "" });
+  const spec = iconSpec();
+  const key = JSON.stringify(spec);
+  if (key === lastIconKey) return;
+  lastIconKey = key;
+  chrome.action.setIcon({ imageData: { 16: drawIcon(16, spec), 32: drawIcon(32, spec) } }).catch(() => {});
+}
+setInterval(badge, 1000);
 
 chrome.runtime.onMessage.addListener((m, sender, reply) => {
   if (m && m.type === "verdict?") {            // content script asking on load

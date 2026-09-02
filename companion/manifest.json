@@ -1,22 +1,52 @@
 {
   "manifest_version": 3,
   "name": "feed-guard companion",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Companion for a self-hosted feed-guard. Freezes a feed in place while your guard has it resting; DNS alone can't stop an open tab.",
-  "permissions": ["tabs", "alarms", "storage"],
-  "background": { "service_worker": "background.js" },
-  "content_scripts": [{
-    "matches": [
-      "*://*.x.com/*", "*://x.com/*", "*://*.twitter.com/*", "*://twitter.com/*",
-      "*://*.instagram.com/*", "*://instagram.com/*",
-      "*://*.tiktok.com/*", "*://tiktok.com/*",
-      "*://*.reddit.com/*", "*://reddit.com/*", "*://*.redd.it/*"
-    ],
-    "js": ["overlay.js"],
-    "run_at": "document_start",
-    "all_frames": false
-  }],
-  "options_ui": { "page": "options.html", "open_in_tab": false },
-  "action": { "default_title": "feed-guard", "default_icon": { "16": "icons/16.png", "48": "icons/48.png" } },
-  "icons": { "16": "icons/16.png", "48": "icons/48.png", "128": "icons/128.png" }
+  "permissions": [
+    "tabs",
+    "alarms",
+    "storage"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.x.com/*",
+        "*://x.com/*",
+        "*://*.twitter.com/*",
+        "*://twitter.com/*",
+        "*://*.instagram.com/*",
+        "*://instagram.com/*",
+        "*://*.tiktok.com/*",
+        "*://tiktok.com/*",
+        "*://*.reddit.com/*",
+        "*://reddit.com/*",
+        "*://*.redd.it/*"
+      ],
+      "js": [
+        "overlay.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ],
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": false
+  },
+  "action": {
+    "default_title": "feed-guard",
+    "default_icon": {
+      "16": "icons/16.png",
+      "48": "icons/48.png"
+    }
+  },
+  "icons": {
+    "16": "icons/16.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
+  }
 }
