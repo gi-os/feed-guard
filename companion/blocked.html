@@ -1,0 +1,25 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>feed-guard</title>
+<style>
+  html,body{height:100%;margin:0;background:#111;color:#eee;font:16px/1.4 -apple-system,system-ui,sans-serif}
+  main{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:24px}
+  h1{font-size:64px;font-weight:300;margin:0;font-variant-numeric:tabular-nums;letter-spacing:.02em}
+  p{margin:0;color:#999;max-width:32ch}
+  .site{text-transform:capitalize;color:#eee}
+</style></head><body><main>
+  <p><span class="site" id="site"></span> is resting.</p>
+  <h1 id="t">--:--</h1>
+  <p>Five minutes were spent. The tab comes back on its own when the timer ends.</p>
+</main>
+<script>
+  const q = new URLSearchParams(location.search);
+  const site = q.get("site") || "this feed", until = +q.get("until") || Date.now();
+  document.getElementById("site").textContent = site;
+  document.title = `${site} · feed-guard`;
+  function tick() {
+    const s = Math.max(0, Math.round((until - Date.now()) / 1000));
+    document.getElementById("t").textContent = `${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`;
+    if (s <= 0) { clearInterval(iv); setTimeout(() => history.length > 1 ? history.back() : location.replace("about:blank"), 1500); }
+  }
+  tick(); const iv = setInterval(tick, 500);
+</script></body></html>

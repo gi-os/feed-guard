@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "feed-guard companion",
+  "version": "1.1.0",
+  "description": "Closes the feeds feed-guard has blocked for this device. DNS can't end an open tab; this does.",
+  "permissions": ["tabs", "alarms", "storage", "webNavigation"],
+  "host_permissions": ["http://192.168.68.59/*", "http://*/*", "https://*/*"],
+  "background": { "service_worker": "background.js" },
+  "options_ui": { "page": "options.html", "open_in_tab": false },
+  "action": { "default_title": "feed-guard" },
+  "web_accessible_resources": [{ "resources": ["blocked.html"], "matches": ["<all_urls>"] }]
+}

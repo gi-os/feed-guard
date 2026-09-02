@@ -34,11 +34,29 @@ docker logs -f feed-guard
 For the block to reach clients quickly, set AdGuard's minimum cache TTL to 0
 and the maximum to 60 (Settings → DNS settings → DNS cache configuration).
 
+## Companion (closes open tabs)
+
+A DNS block cannot end a connection that is already open. A feed left scrolling
+in a tab keeps its HTTP/2 sockets and never asks DNS again, so the block is
+never felt. The guard therefore serves `GET /status` on port 8060, which answers
+for the caller's own IP:
+
+```
+{"client":"192.168.68.94","blocked":{"x":{"seconds_left":211,"domains":[...]}},
+ "used_minutes":{"reddit":2},"budget_minutes":5,"cooldown_minutes":5,"sites":{...}}
+```
+
+`companion/` is a Manifest V3 browser extension (Chrome, Dia, Arc, Brave, Edge)
+that polls it every 10-30 s and sends every tab on a blocked site to a countdown
+page, and catches new navigations to a blocked site on the spot. Load it with
+`chrome://extensions` → Developer mode → Load unpacked → the `companion` folder.
+The status URL is editable in the extension's options. The badge shows minutes
+spent (`3/5`) or the number of sites resting.
+
 ## Limits
 
-* DNS blocks bite on the next lookup. An open feed keeps going until its cached
-  records expire and its HTTP/2 connections drop. Expect a lag of one to two
-  minutes before the block is felt.
+* Without the companion, a DNS block bites only on the next lookup. An open feed
+  keeps going until its cached records expire and its HTTP/2 connections drop.
 * Only devices that use this DNS are covered. iCloud Private Relay, browser DoH
   or a VPN bypass it, unless the device is pointed at AdGuard's own DoH endpoint.
 * The query log must have `anonymize_client_ip` off or every device looks alike.
@@ -49,3 +67,12 @@ and the maximum to 60 (Settings → DNS settings → DNS cache configuration).
 lookups from one LAN client produced eight `$client=` rules for that IP only,
 `api.x.com → 0.0.0.0` for that client, `instagram.com` unaffected, release after
 five minutes.
+
+## Releases
+
+* **v1.1.0** (2026-09-02) — `GET /status` endpoint on :8060 (per-caller blocks,
+  minutes used, domain lists); `companion/` browser extension that closes tabs
+  on blocked sites and intercepts new navigations. Fixes the "open tab never
+  stops" gap.
+* **v1.0.0** (2026-09-02) — first release: per-device, per-site 5/5 budgets via
+  AdGuard user rules.

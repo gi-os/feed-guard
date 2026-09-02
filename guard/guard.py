@@ -11,6 +11,11 @@ IDLE_RESET minutes with no traffic.
 
 The guard owns only the block of user rules between its two marker lines;
 anything else in the user-rules box is preserved verbatim.
+
+A DNS block cannot close a connection that is already open, so the guard also
+serves `GET /status` on STATUS_PORT. It answers for the caller's own IP with the
+sites currently blocked and the budget already spent, so a companion on the
+device (see `companion/`) can shut the open tabs itself.
 """
 
 import json
@@ -18,7 +23,9 @@ import logging
 import os
 import re
 import sys
+import threading
 import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from datetime import datetime
 from pathlib import Path
 
@@ -34,6 +41,10 @@ BUDGET_OVERRIDE = os.environ.get("BUDGET_MINUTES")  # testing hook
 POLL = int(os.environ.get("POLL_SECONDS", "15"))
 STATE_PATH = Path(os.environ.get("STATE_PATH", "/state/state.json"))
 SITES_PATH = Path(os.environ.get("SITES_PATH", "/app/sites.yml"))
+STATUS_PORT = int(os.environ.get("STATUS_PORT", "8060"))
+
+# Shared with the status server. Replaced wholesale by tick(), never mutated.
+SNAPSHOT = {"state": {"sessions": {}, "blocks": {}}, "sites": {}, "budget": 0, "cooldown": 0}
 
 MARK_BEGIN = "! feed-guard begin (managed, do not edit)"
 MARK_END = "! feed-guard end"
@@ -124,7 +135,63 @@ def sync_rules(blocks, sites):
     api("POST", "/filtering/set_rules", json={"rules": rules + managed})
 
 
+class StatusHandler(BaseHTTPRequestHandler):
+    """GET /status -> the caller's own blocks and budgets, keyed by site.
+
+    Bridge-mode published ports keep the client's real source address, so the
+    peer IP is the same identity the guard uses for its rules. `?client=` lets a
+    DoH-ClientID device ask about itself by name.
+    """
+
+    server_version = "feed-guard"
+
+    def log_message(self, *_):
+        pass
+
+    def do_GET(self):
+        path, _, query = self.path.partition("?")
+        if path != "/status":
+            self.send_response(404)
+            self.end_headers()
+            return
+        who = self.client_address[0]
+        for part in query.split("&"):
+            k, _, v = part.partition("=")
+            if k == "client" and v:
+                who = v
+        snap = SNAPSHOT
+        now = time.time()
+        blocked = {}
+        for key, until in snap["state"]["blocks"].items():
+            ip, site = key.split("|", 1)
+            if ip == who and until > now:
+                blocked[site] = {"seconds_left": int(until - now),
+                                 "domains": list(snap["sites"].get(site, ()))}
+        used = {}
+        for key, sess in snap["state"]["sessions"].items():
+            ip, site = key.split("|", 1)
+            if ip == who and site not in blocked:
+                used[site] = len(sess.get("minutes", []))
+        body = json.dumps({"client": who, "blocked": blocked, "used_minutes": used,
+                           "budget_minutes": snap["budget"], "cooldown_minutes": snap["cooldown"],
+                           "sites": {k: list(v) for k, v in snap["sites"].items()}}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+
+def start_status_server():
+    srv = ThreadingHTTPServer(("0.0.0.0", STATUS_PORT), StatusHandler)
+    threading.Thread(target=srv.serve_forever, name="status", daemon=True).start()
+    log.info("status endpoint on :%d", STATUS_PORT)
+
+
 def tick(state, sites, budget, cooldown, idle_reset):
+    global SNAPSHOT
     now = time.time()
     sessions, blocks = state["sessions"], state["blocks"]
     dirty = False
@@ -168,6 +235,8 @@ def tick(state, sites, budget, cooldown, idle_reset):
     if dirty:
         sync_rules(blocks, sites)
     save_state(state)
+    SNAPSHOT = {"state": json.loads(json.dumps(state)), "sites": sites,
+                "budget": budget, "cooldown": cooldown}
 
 
 def main():
@@ -175,6 +244,10 @@ def main():
     state = load_state()
     log.info("watching %s | budget %dm, cooldown %dm, idle reset %dm",
              ", ".join(sites), budget, cooldown, idle_reset)
+    global SNAPSHOT
+    SNAPSHOT = {"state": json.loads(json.dumps(state)), "sites": sites,
+                "budget": budget, "cooldown": cooldown}
+    start_status_server()
     while True:
         try:
             sync_rules(state["blocks"], sites)  # reconcile after a restart
