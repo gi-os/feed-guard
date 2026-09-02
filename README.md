@@ -47,8 +47,10 @@ for the caller's own IP:
 ```
 
 `companion/` is a Manifest V3 browser extension (Chrome, Dia, Arc, Brave, Edge)
-that polls it every 10-30 s and sends every tab on a blocked site to a countdown
-page, and catches new navigations to a blocked site on the spot. Load it with
+that polls it every 10-30 s and, while a site is resting, freezes every tab on it
+under a full-screen countdown: no scrolling, no keys, videos paused, nothing
+navigates. When the timer ends the overlay lifts and the feed is exactly where
+it was. A content script at `document_start` covers new tabs on the spot. Load it with
 `chrome://extensions` → Developer mode → Load unpacked → the `companion` folder.
 The status URL is editable in the extension's options. The badge shows minutes
 spent (`3/5`) or the number of sites resting.
@@ -69,6 +71,10 @@ lookups from one LAN client produced eight `$client=` rules for that IP only,
 five minutes.
 
 ## Releases
+
+* **v1.2.0** (2026-09-02) — companion freezes the page in place with an overlay
+  instead of redirecting to a block page; the feed resumes at the same spot. MV3
+  CSP fix (no inline scripts).
 
 * **v1.1.0** (2026-09-02) — `GET /status` endpoint on :8060 (per-caller blocks,
   minutes used, domain lists); `companion/` browser extension that closes tabs
