@@ -1,0 +1,18 @@
+# Drop-in service for an existing AdGuard Home compose stack.
+# Bridge mode is fine as long as AdGuard sees real client IPs (it does on
+# a standard Docker bridge with published ports — check the query log first).
+services:
+  feed-guard:
+    build: ./feed-guard
+    container_name: feed-guard
+    restart: unless-stopped
+    depends_on: [adguardhome]
+    environment:
+      - ADGUARD_URL=http://adguardhome:3000
+      - ADGUARD_USER=admin
+      - ADGUARD_PASS=change-me
+      - POLL_SECONDS=15
+      - TZ=America/New_York
+    volumes:
+      - ./feed-guard/state:/state
+      - ./feed-guard/sites.yml:/app/sites.yml:ro

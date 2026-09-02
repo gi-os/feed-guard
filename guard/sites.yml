@@ -1,0 +1,36 @@
+# One budget per site per device. Domains are matched as suffixes.
+budget_minutes: 5      # active minutes allowed per session
+cooldown_minutes: 5    # block length once the budget is spent
+idle_reset_minutes: 10 # no traffic for this long => session forgotten
+sites:
+  x:
+    - x.com
+    - twitter.com
+    - twimg.com
+    - t.co
+    - twttr.com
+    - pscp.tv
+    - periscope.tv
+    - ads-twitter.com
+  instagram:
+    - instagram.com
+    - cdninstagram.com
+    - igcdn.com
+    - igsonar.com
+  tiktok:
+    - tiktok.com
+    - tiktokcdn.com
+    - tiktokcdn-us.com
+    - tiktokv.com
+    - tiktokv.us
+    - ttwstatic.com
+    - ibytedtos.com
+    - byteoversea.com
+    - musical.ly
+    - muscdn.com
+    - tiktokd.org
+  reddit:
+    - reddit.com
+    - redd.it
+    - redditmedia.com
+    - redditstatic.com
