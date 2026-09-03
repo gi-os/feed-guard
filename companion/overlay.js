@@ -31,7 +31,8 @@
 
   function unmount() {
     const el = document.getElementById(ID);
-    if (el) el.remove();
+    if (!el) return;                       // nothing up: never touch the page
+    el.remove();
     for (const ev of EVENTS) window.removeEventListener(ev, swallow, { capture: true });
     clearInterval(timer); timer = null;
     if (Math.abs(window.scrollY - scrollY) > 2) window.scrollTo(0, scrollY);
