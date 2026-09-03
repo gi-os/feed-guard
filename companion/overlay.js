@@ -4,6 +4,7 @@
 (() => {
   const ID = "__feed_guard_overlay";
   let until = 0, timer = null, scrollY = 0;
+  const FADE_S = 30;
 
   const swallow = e => { e.stopImmediatePropagation(); e.preventDefault(); };
   const EVENTS = ["wheel", "touchstart", "touchmove", "keydown", "keyup", "keypress", "mousedown", "mouseup", "click", "dblclick", "pointerdown", "pointerup", "contextmenu"];
@@ -25,7 +26,7 @@
     (document.body || root).appendChild(el);
     for (const ev of EVENTS) window.addEventListener(ev, swallow, { capture: true, passive: false });
     document.querySelectorAll("video, audio").forEach(m => { try { m.pause(); } catch {} });
-    timer = setInterval(tick, 500);
+    timer = setInterval(tick, 100);
     tick();
   }
 
@@ -44,6 +45,10 @@
     const s = Math.max(0, Math.round((until - Date.now()) / 1000));
     el.querySelector("[data-t]").textContent =
       `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+    // Last FADE_S seconds: the curtain thins until the feed shows through.
+    // Input stays swallowed until zero, so it is a preview, not a head start.
+    const left = (until - Date.now()) / 1000;
+    el.style.opacity = left < FADE_S ? String(Math.max(0, left / FADE_S)) : "1";
     if (s <= 0) unmount();
   }
 
