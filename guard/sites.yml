@@ -1,4 +1,7 @@
 # One budget per site per device. Domains are matched as suffixes.
+# `only`: act on these devices (LAN IP or DoH ClientID) and ignore everyone else.
+# Leave empty or delete to guard every device on the network.
+only: []
 budget_minutes: 5      # active minutes allowed per session
 cooldown_minutes: 5    # block length once the budget is spent
 idle_reset_minutes: 10 # no traffic for this long => session forgotten

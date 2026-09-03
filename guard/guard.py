@@ -52,8 +52,13 @@ MARK_END = "! feed-guard end"
 _FRAC = re.compile(r"\.(\d+)")
 
 
+ONLY = set()  # device identities the guard acts on; empty = everyone
+
+
 def load_sites():
+    global ONLY
     cfg = yaml.safe_load(SITES_PATH.read_text())
+    ONLY = set(str(x) for x in (cfg.get("only") or []))
     return (
         {name: tuple(d.lower().strip(".") for d in doms) for name, doms in cfg["sites"].items()},
         int(BUDGET_OVERRIDE or cfg.get("budget_minutes", 5)),
@@ -206,7 +211,7 @@ def tick(state, sites, budget, cooldown, idle_reset):
     # 2. count activity, one tick per (device, site, wall-clock minute)
     for ts, ip, qname in fetch_new_queries(state):
         site = site_for(qname, sites)
-        if not site or not ip:
+        if not site or not ip or (ONLY and ip not in ONLY):
             continue
         key = f"{ip}|{site}"
         if key in blocks:
@@ -242,8 +247,8 @@ def tick(state, sites, budget, cooldown, idle_reset):
 def main():
     sites, budget, cooldown, idle_reset = load_sites()
     state = load_state()
-    log.info("watching %s | budget %dm, cooldown %dm, idle reset %dm",
-             ", ".join(sites), budget, cooldown, idle_reset)
+    log.info("watching %s | budget %dm, cooldown %dm, idle reset %dm | devices: %s",
+             ", ".join(sites), budget, cooldown, idle_reset, ", ".join(sorted(ONLY)) or "all")
     global SNAPSHOT
     SNAPSHOT = {"state": json.loads(json.dumps(state)), "sites": sites,
                 "budget": budget, "cooldown": cooldown}
