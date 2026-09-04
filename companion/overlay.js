@@ -63,9 +63,23 @@
     }
   }
 
+  // After the extension is reloaded this copy of the script is orphaned: its
+  // runtime is gone and every call throws "Extension context invalidated".
+  // The fresh copy takes over on the next page load; this one just steps aside.
+  let alive = true;
+  function ask(url) {
+    if (!alive) return;
+    try {
+      chrome.runtime.sendMessage({ type: "verdict?", url }, v => {
+        if (chrome.runtime.lastError) return;   // worker asleep or gone; next poll pushes
+        apply(v);
+      });
+    } catch (e) { alive = false; clearInterval(route); unmount(); }
+  }
+
   chrome.runtime.onMessage.addListener(m => { if (m && m.type === "verdict") apply(m); });
-  chrome.runtime.sendMessage({ type: "verdict?", url: location.href }, apply);
+  ask(location.href);
   // Re-ask when the SPA changes route (x.com never reloads).
   let last = location.href;
-  setInterval(() => { if (location.href !== last) { last = location.href; chrome.runtime.sendMessage({ type: "verdict?", url: last }, apply); } }, 2000);
+  const route = setInterval(() => { if (location.href !== last) { last = location.href; ask(last); } }, 2000);
 })();
