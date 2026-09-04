@@ -4,7 +4,7 @@
 only: []
 budget_minutes: 5      # active minutes allowed per session
 cooldown_minutes: 5    # block length once the budget is spent
-idle_reset_minutes: 10 # no traffic for this long => session forgotten
+regen_every_minutes: 2 # time away: one minute of budget back per 2 minutes off the site
 sites:
   x:
     - x.com

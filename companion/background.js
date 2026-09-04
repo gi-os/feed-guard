@@ -77,6 +77,14 @@ function drawIcon(size, { frac, label, color, faint }) {
   return g.getImageData(0, 0, size, size);
 }
 
+// Minutes spent on a site right now, letting regen run between polls.
+function usedNow(site) {
+  const u = (status.used_minutes || {})[site];
+  if (u == null) return 0;
+  const away = Math.max(0, (Date.now() - status.fetchedAt) / 1000 / 60);
+  return Math.max(0, u - away / (status.regen_every_minutes || 2));
+}
+
 function iconSpec() {
   const blocked = status.blocked || {};
   const keys = Object.keys(blocked);
@@ -87,10 +95,10 @@ function iconSpec() {
     return { frac: left / total, color: "#e74c3c", faint: "rgba(231,76,60,.25)",
              label: left >= 60 ? String(Math.ceil(left / 60)) : String(Math.ceil(left)) };
   }
-  const used = Object.values(status.used_minutes || {});
+  const used = Object.keys(status.used_minutes || {}).map(usedNow);
   const worst = used.length ? Math.max(...used) : 0;
   const budget = status.budget_minutes || 5;
-  if (worst) return { frac: worst / budget, color: worst >= budget - 1 ? "#e67e22" : "#ecf0f1", faint: "rgba(236,240,241,.25)", label: String(worst) };
+  if (worst > 0) return { frac: worst / budget, color: worst >= budget - 1 ? "#e67e22" : "#ecf0f1", faint: "rgba(236,240,241,.25)", label: String(Math.ceil(worst)) };
   return { frac: 0, color: "#ecf0f1", faint: "rgba(236,240,241,.35)", label: "" };
 }
 

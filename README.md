@@ -3,8 +3,8 @@
 Per-device time budgets for social feeds, enforced at the DNS layer by
 [AdGuard Home](https://github.com/AdguardTeam/AdGuardHome). Five active minutes
 of X, Instagram, TikTok or Reddit per device, then five minutes of `0.0.0.0`.
-Every device and every site has its own budget. Sessions reset after ten idle
-minutes.
+Every device and every site has its own budget, and time away earns it back:
+one minute per two minutes off the site by default.
 
 ## How it works
 
@@ -71,6 +71,12 @@ lookups from one LAN client produced eight `$client=` rules for that IP only,
 five minutes.
 
 ## Releases
+
+* **v1.4.0** (2026-09-03) — budgets regenerate while you are away
+  (`regen_every_minutes`, default 2) instead of a hard idle reset; `/status`
+  reports fractional `used_minutes` and `full_in_seconds`. `only:` device
+  allowlist (v1.3.0). `t.co` dropped from X. Companion 1.3.0: icon and popup
+  count time back up; 30 s fade-out before release.
 
 * **v1.2.0** (2026-09-02) — companion freezes the page in place with an overlay
   instead of redirecting to a block page; the feed resumes at the same spot. MV3

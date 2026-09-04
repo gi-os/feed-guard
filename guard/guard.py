@@ -63,8 +63,18 @@ def load_sites():
         {name: tuple(d.lower().strip(".") for d in doms) for name, doms in cfg["sites"].items()},
         int(BUDGET_OVERRIDE or cfg.get("budget_minutes", 5)),
         int(cfg.get("cooldown_minutes", 5)),
-        int(cfg.get("idle_reset_minutes", 10)),
+        float(cfg.get("regen_every_minutes", cfg.get("idle_reset_minutes", 10) / 5)),
     )
+
+
+def used_now(sess, now, regen_every):
+    """Minutes of budget spent, after time away has earned some back.
+
+    The minute of the last activity is itself spent, so only the gap beyond it
+    counts as time away. One minute returns per `regen_every` minutes away.
+    """
+    away = max(0.0, (now - sess["last"]) / 60 - 1)
+    return max(0.0, sess["used"] - away / regen_every)
 
 
 def site_for(qname, sites):
@@ -172,13 +182,18 @@ class StatusHandler(BaseHTTPRequestHandler):
             if ip == who and until > now:
                 blocked[site] = {"seconds_left": int(until - now),
                                  "domains": list(snap["sites"].get(site, ()))}
-        used = {}
+        used, full_in = {}, {}
         for key, sess in snap["state"]["sessions"].items():
             ip, site = key.split("|", 1)
-            if ip == who and site not in blocked:
-                used[site] = len(sess.get("minutes", []))
-        body = json.dumps({"client": who, "blocked": blocked, "used_minutes": used,
+            if ip == who and site not in blocked and "used" in sess:
+                u = used_now(sess, now, snap["regen_every"])
+                if u > 0:
+                    used[site] = round(u, 2)
+                    # seconds until this budget is whole again, if left alone
+                    full_in[site] = int(max(0, (sess["last"] + 60 - now)) + u * snap["regen_every"] * 60)
+        body = json.dumps({"client": who, "blocked": blocked, "used_minutes": used, "full_in_seconds": full_in,
                            "budget_minutes": snap["budget"], "cooldown_minutes": snap["cooldown"],
+                           "regen_every_minutes": snap["regen_every"],
                            "sites": {k: list(v) for k, v in snap["sites"].items()}}).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
@@ -195,7 +210,7 @@ def start_status_server():
     log.info("status endpoint on :%d", STATUS_PORT)
 
 
-def tick(state, sites, budget, cooldown, idle_reset):
+def tick(state, sites, budget, cooldown, regen_every):
     global SNAPSHOT
     now = time.time()
     sessions, blocks = state["sessions"], state["blocks"]
@@ -217,22 +232,26 @@ def tick(state, sites, budget, cooldown, idle_reset):
         if key in blocks:
             continue  # blocked queries don't extend the budget
         minute = int(ts // 60)
-        s = sessions.setdefault(key, {"minutes": [], "last": ts})
-        if ts - s["last"] > idle_reset * 60:
-            s["minutes"] = []
-        s["last"] = max(s["last"], ts)
-        if minute not in s["minutes"]:
-            s["minutes"].append(minute)
-            log.info("%s active %d/%d min", key, len(s["minutes"]), budget)
+        s = sessions.get(key)
+        if s is None or "used" not in s:
+            s = sessions[key] = {"used": 0.0, "last": ts, "minute": None}
+        if minute != s["minute"]:
+            # Settle what time away gave back, then spend this minute.
+            s["used"] = used_now(s, ts, regen_every) + 1
+            s["minute"] = minute
+            s["last"] = max(s["last"], ts)
+            log.info("%s active %.1f/%d min", key, s["used"], budget)
+        else:
+            s["last"] = max(s["last"], ts)
 
-    # 3. forget idle sessions, block exhausted ones
+    # 3. drop fully-regenerated sessions, block exhausted ones
     for key, s in list(sessions.items()):
         if key in blocks:
             continue
-        if now - s["last"] > idle_reset * 60:
+        if used_now(s, now, regen_every) <= 0:
             del sessions[key]
             continue
-        if len(s["minutes"]) >= budget:
+        if s["used"] >= budget:
             blocks[key] = now + cooldown * 60
             log.info("BLOCK %s for %dm", key, cooldown)
             dirty = True
@@ -241,17 +260,18 @@ def tick(state, sites, budget, cooldown, idle_reset):
         sync_rules(blocks, sites)
     save_state(state)
     SNAPSHOT = {"state": json.loads(json.dumps(state)), "sites": sites,
-                "budget": budget, "cooldown": cooldown}
+                "budget": budget, "cooldown": cooldown, "regen_every": regen_every}
 
 
 def main():
-    sites, budget, cooldown, idle_reset = load_sites()
+    sites, budget, cooldown, regen_every = load_sites()
     state = load_state()
-    log.info("watching %s | budget %dm, cooldown %dm, idle reset %dm | devices: %s",
-             ", ".join(sites), budget, cooldown, idle_reset, ", ".join(sorted(ONLY)) or "all")
+    state["sessions"] = {k: v for k, v in state["sessions"].items() if "used" in v}  # drop v1 shape
+    log.info("watching %s | budget %dm, cooldown %dm, 1 min back per %.1f min away | devices: %s",
+             ", ".join(sites), budget, cooldown, regen_every, ", ".join(sorted(ONLY)) or "all")
     global SNAPSHOT
     SNAPSHOT = {"state": json.loads(json.dumps(state)), "sites": sites,
-                "budget": budget, "cooldown": cooldown}
+                "budget": budget, "cooldown": cooldown, "regen_every": regen_every}
     start_status_server()
     while True:
         try:
@@ -262,7 +282,7 @@ def main():
             time.sleep(POLL)
     while True:
         try:
-            tick(state, sites, budget, cooldown, idle_reset)
+            tick(state, sites, budget, cooldown, regen_every)
         except requests.RequestException as ex:
             log.warning("adguard unreachable: %s", ex)
         except Exception:
